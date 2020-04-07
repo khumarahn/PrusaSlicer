@@ -146,6 +146,7 @@ public:
         m_last_analyzer_extrusion_role(erNone),
         m_layer_count(0),
         m_layer_index(-1), 
+        m_past_layer_print_time(0),
         m_layer(nullptr), 
         m_volumetric_speed(0),
         m_last_pos_defined(false),
@@ -334,6 +335,8 @@ private:
     unsigned int                        m_layer_count;
     // Progress bar indicator. Increments from -1 up to layer_count.
     int                                 m_layer_index;
+    // Time the past layer takes in seconds, not including the layer change scripts ("printing time")
+    float                               m_past_layer_print_time;
     // Current layer processed. Insequential printing mode, only a single copy will be printed.
     // In non-sequential mode, all its copies will be printed.
     const Layer*                        m_layer;

@@ -1951,28 +1951,32 @@ void GCode::process_layer(
     }
     // If we're going to apply spiralvase to this layer, disable loop clipping
     m_enable_loop_clipping = ! m_spiral_vase || ! m_spiral_vase->enable;
-    
-    std::string gcode;
+
+    std::string gcode_layer_change;
 
     // Set new layer - this will change Z and force a retraction if retract_layer_change is enabled.
     if (! print.config().before_layer_gcode.value.empty()) {
         DynamicConfig config;
         config.set_key_value("layer_num", new ConfigOptionInt(m_layer_index + 1));
         config.set_key_value("layer_z",   new ConfigOptionFloat(print_z));
-        gcode += this->placeholder_parser_process("before_layer_gcode",
+        config.set_key_value("past_layer_print_time",  new ConfigOptionFloat(m_past_layer_print_time));
+        gcode_layer_change += this->placeholder_parser_process("before_layer_gcode",
             print.config().before_layer_gcode.value, m_writer.extruder()->id(), &config)
             + "\n";
     }
-    gcode += this->change_layer(print_z);  // this will increase m_layer_index
+    gcode_layer_change += this->change_layer(print_z);  // this will increase m_layer_index
 	m_layer = &layer;
     if (! print.config().layer_gcode.value.empty()) {
         DynamicConfig config;
         config.set_key_value("layer_num", new ConfigOptionInt(m_layer_index));
         config.set_key_value("layer_z",   new ConfigOptionFloat(print_z));
-        gcode += this->placeholder_parser_process("layer_gcode",
+        config.set_key_value("past_layer_print_time",  new ConfigOptionFloat(m_past_layer_print_time));
+        gcode_layer_change += this->placeholder_parser_process("layer_gcode",
             print.config().layer_gcode.value, m_writer.extruder()->id(), &config)
             + "\n";
     }
+
+    std::string gcode;
 
     if (! first_layer && ! m_second_layer_things_done) {
         // Transition from 1st to 2nd layer. Adjust nozzle temperatures as prescribed by the nozzle dependent
@@ -2284,8 +2288,15 @@ void GCode::process_layer(
         gcode = m_pressure_equalizer->process(gcode.c_str(), false);
     // printf("G-code after filter:\n%s\n", out.c_str());
 #endif /* HAS_PRESSURE_EQUALIZER */
-    
+
+    // write gcode and estimate past layer time
+    _write(file, gcode_layer_change);
+    m_normal_time_estimator.calculate_time(false);
+    m_past_layer_print_time = m_normal_time_estimator.get_time();
     _write(file, gcode);
+    m_normal_time_estimator.calculate_time(false);
+    m_past_layer_print_time = m_normal_time_estimator.get_time() - m_past_layer_print_time;
+
     BOOST_LOG_TRIVIAL(trace) << "Exported layer " << layer.id() << " print_z " << print_z << 
         ", time estimator memory: " <<
             format_memsize_MB(m_normal_time_estimator.memory_used() + (m_silent_time_estimator_enabled ? m_silent_time_estimator.memory_used() : 0)) <<
